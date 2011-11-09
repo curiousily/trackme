@@ -3,3 +3,5 @@
 dist/
 resources/raw/
 resources/trackme.db
+log/error.log
+log/access.log

@@ -95,6 +95,9 @@ profileForm = (\n d e t -> Profile Nothing n d e t)
        ++> inputText Nothing 
        <++ errors
 
+------------------------------------------------------------------------------
+-- | Validators
+
 isEmail :: Monad m => Validator m Html Text
 isEmail = check "Invalid email address" (E.isValid . DT.unpack)
 
@@ -106,78 +109,6 @@ strongPwd = check "Password needs to contain at least one non-alphanumeric chara
 
 isNonEmpty :: Monad m => Validator m Html Text
 isNonEmpty = check "Field must not be empty" $ not . DT.null
-
-------------------------------------------------------------------------------
--- | Handlers
-indexHandler :: AppHandler ()
-indexHandler = do
-  loggedIn <- with auth isLoggedIn
-  blaze $ renderIndex loggedIn
-
--- TODO: Find a way to not have to commit session changes explicitly
-loginFormHandler :: AppHandler ()
-loginFormHandler = withSession appsess $ do
-  loggedIn <- with auth isLoggedIn
-  when loggedIn $ redirect "/"
-  res <- eitherSnapForm loginForm "login-form-name"
-  case res of
-    Left form' ->
-      with appsess $ do
-        didFail <- getFromSession "login-failed"
-        blaze $ renderLoginForm didFail form'
-        deleteFromSession "login-failed"
-        commitSession
-    Right (User e p) -> do
-      loginRes <- with auth $ loginByUsername (DT.encodeUtf8 e) (ClearText $ DT.encodeUtf8 p) False
-      case loginRes of
-        Left _   ->  do  with appsess $ do
-                           setInSession "login-failed" "1"
-                           commitSession
-                         redirect "/login"
-        Right _  ->  redirect "/"
-
-logoutHandler :: AppHandler ()
-logoutHandler = do
-  with auth logout
-  redirect "/"
-
-newProfileHandler :: AppHandler ()
-newProfileHandler = do
-  res <- eitherSnapForm profileForm "profile-form-name"
-  case res of
-    Left form' -> do
-      blaze $ renderNewProfileForm form'
-
-addProfileHandler :: AppHandler ()
-addProfileHandler = do
-  res <- eitherSnapForm profileForm "profile-form-name"
-  case res of
-    Right prof -> do
-      _ <- addProfile prof
-      redirect "/"
-
-listProfilesHandler :: AppHandler ()
-listProfilesHandler = do
-  profiles <- allProfiles
-  blaze $ renderProfiles profiles
-
-listLatestProfilesHandler :: AppHandler ()
-listLatestProfilesHandler = do
-  profiles <- latestProfiles
-  blaze $ renderProfiles profiles
-
-listExperiencedProfilesHandler :: AppHandler ()
-listExperiencedProfilesHandler = do
-  profiles <- experiencedProfiles
-  blaze $ renderProfiles profiles
-
-deleteProfileHandler :: AppHandler ()
-deleteProfileHandler = do
-  maybe (return ())
-        (\i -> do _ <- removeProfile (read $ unpack i)
-                  return ()) =<< getParam "id"
-  redirect "/"
-
 
 ------------------------------------------------------------------------------
 -- | HTML views
@@ -225,7 +156,6 @@ htmlTemplate loggedIn bdy = H.docTypeHtml $ do
         H.p "Copyright 2011 Design by Venelin Valkov"
       H.div ! A.class_ "clear" $ ""
 
--- TODO: Abstract over these forms?
 renderLoginForm :: Maybe Text -> FormHtml (HtmlM a) -> Html
 renderLoginForm didFail form' = do
   let (formHtml', enctype) = renderFormHtml form'
@@ -246,6 +176,18 @@ renderIndex ili =
       H.footer ! A.class_ "post-meta" $ do
         H.span ! A.class_ "author vcard" $ do
           H.p "TrackMe team"
+
+renderNewProfileForm :: FormHtml (HtmlM a) -> Html
+renderNewProfileForm form' = do
+  let (formHtml', enctype) = renderFormHtml form'
+  htmlTemplate False $ do
+    H.article ! A.class_ "post" $ do
+      H.h1 "New profile" ! A.class_ "entry-title"
+      H.form ! A.enctype (toValue $ show enctype)
+        ! A.method "POST" ! A.action "/profile/new" $ do
+          _ <- formHtml'
+          H.p $ do
+            H.input ! A.type_ "submit" ! A.value "Submit"
 
 renderProfiles :: [Profile] -> Html
 renderProfiles profiles =
@@ -271,38 +213,8 @@ blaze response = do
   modifyResponse $ addHeader "Content-Type" "text/html; charset=UTF-8"
   writeLBS $ renderHtml response
 
-renderNewProfileForm :: FormHtml (HtmlM a) -> Html
-renderNewProfileForm form' = do
-  let (formHtml', enctype) = renderFormHtml form'
-  htmlTemplate False $ do
-    H.article ! A.class_ "post" $ do
-      H.h1 "New profile" ! A.class_ "entry-title"
-      H.form ! A.enctype (toValue $ show enctype)
-        ! A.method "POST" ! A.action "/profile/new" $ do
-          _ <- formHtml'
-          H.p $ do
-            H.input ! A.type_ "submit" ! A.value "Submit"
-
 ------------------------------------------------------------------------------
--- | Profile handlers
-
-
-addProfile :: HasHdbc p c s => Profile -> p Integer
-addProfile (Profile _ n d e t) = do
-  query'  "INSERT INTO profiles (name, description, experience, twitter) VALUES (?, ?, ?, ?)" [toSql n, toSql d, toSql e, toSql t]
-
-
-removeProfile :: HasHdbc m c s => Int -> m Integer
-removeProfile pId = query' "DELETE FROM profiles WHERE id = ?" [toSql pId]
-
-convertProfile :: Map String SqlValue -> Profile
-convertProfile mp =
-  let readSql k = fromSql $ mp DM.! k
-  in   Profile  (Just $ read $ readSql "id")
-                (readSql "name")
-                (readSql "description")
-                (readSql "experience")
-                (readSql "twitter")
+-- | Profiles db operations
 
 allProfiles :: HasHdbc p c s => p [Profile]
 allProfiles = do
@@ -318,6 +230,93 @@ latestProfiles :: HasHdbc p c s => p [Profile]
 latestProfiles = do
   rows <- query "SELECT * FROM profiles ORDER BY id DESC" []
   return $ map convertProfile rows
+
+convertProfile :: Map String SqlValue -> Profile
+convertProfile mp =
+  let readSql k = fromSql $ mp DM.! k
+  in   Profile  (Just $ read $ readSql "id")
+                (readSql "name")
+                (readSql "description")
+                (readSql "experience")
+                (readSql "twitter")
+
+addProfile :: HasHdbc p c s => Profile -> p Integer
+addProfile (Profile _ n d e t) = do
+  query'  "INSERT INTO profiles (name, description, experience, twitter) VALUES (?, ?, ?, ?)" [toSql n, toSql d, toSql e, toSql t]
+
+
+removeProfile :: HasHdbc m c s => Int -> m Integer
+removeProfile pId = query' "DELETE FROM profiles WHERE id = ?" [toSql pId]
+
+------------------------------------------------------------------------------
+-- | Handlers
+indexHandler :: AppHandler ()
+indexHandler = do
+  loggedIn <- with auth isLoggedIn
+  blaze $ renderIndex loggedIn
+
+loginFormHandler :: AppHandler ()
+loginFormHandler = withSession appsess $ do
+  loggedIn <- with auth isLoggedIn
+  when loggedIn $ redirect "/"
+  res <- eitherSnapForm loginForm "login-form-name"
+  case res of
+    Left form' ->
+      with appsess $ do
+        didFail <- getFromSession "login-failed"
+        blaze $ renderLoginForm didFail form'
+        deleteFromSession "login-failed"
+        commitSession
+    Right (User e p) -> do
+      loginRes <- with auth $ loginByUsername (DT.encodeUtf8 e) (ClearText $ DT.encodeUtf8 p) False
+      case loginRes of
+        Left _   ->  do  with appsess $ do
+                           setInSession "login-failed" "1"
+                           commitSession
+                         redirect "/login"
+        Right _  ->  redirect "/"
+
+logoutHandler :: AppHandler ()
+logoutHandler = do
+  with auth logout
+  redirect "/"
+
+listProfilesHandler :: AppHandler ()
+listProfilesHandler = do
+  profiles <- allProfiles
+  blaze $ renderProfiles profiles
+
+listLatestProfilesHandler :: AppHandler ()
+listLatestProfilesHandler = do
+  profiles <- latestProfiles
+  blaze $ renderProfiles profiles
+
+listExperiencedProfilesHandler :: AppHandler ()
+listExperiencedProfilesHandler = do
+  profiles <- experiencedProfiles
+  blaze $ renderProfiles profiles
+  
+newProfileHandler :: AppHandler ()
+newProfileHandler = do
+  res <- eitherSnapForm profileForm "profile-form-name"
+  case res of
+    Left form' -> do
+      blaze $ renderNewProfileForm form'
+
+addProfileHandler :: AppHandler ()
+addProfileHandler = do
+  res <- eitherSnapForm profileForm "profile-form-name"
+  case res of
+    Right prof -> do
+      _ <- addProfile prof
+      redirect "/"
+
+deleteProfileHandler :: AppHandler ()
+deleteProfileHandler = do
+  maybe (return ())
+        (\i -> do _ <- removeProfile (read $ unpack i)
+                  return ()) =<< getParam "id"
+  redirect "/"
 
 ------------------------------------------------------------------------------
 -- | App initializer
@@ -341,6 +340,6 @@ trackme = makeSnaplet "trackme" "University relatet project" Nothing
   conn   <- nestSnaplet "hdbc" hdbc $ hdbcInit sqli
   auth'  <- nestSnaplet "auth" auth $
               initHdbcAuthManager defAuthSettings appsess sqli defAuthTable
-              defQueries -- TODO: We do not want to make this dependent on the instantiated session type...
+              defQueries 
   return $ App auth' sess conn
 
