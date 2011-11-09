@@ -1,0 +1,5 @@
+*.swp
+.ghci
+dist/
+resources/raw/
+resources/trackme.db

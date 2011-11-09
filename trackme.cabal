@@ -1,0 +1,57 @@
+Name:                trackme
+Version:             0.1
+Synopsis:            Project Synopsis Here
+Description:         University related project
+License:             MIT
+Author:              Venelin Valkov
+Maintainer:          example@example.com
+Stability:           Experimental
+Category:            Web
+Build-type:          Simple
+Cabal-version:       >=1.2
+
+Flag development
+  Description: Whether to build the server in development (interpreted) mode
+  Default: False
+
+Executable trackme
+  hs-source-dirs: src
+  main-is: Main.hs
+
+  Build-Depends:       aeson >= 0.3,
+                       attoparsec >= 0.9,
+                       base >= 4 && < 5,
+                       blaze-html >= 0.4.1,
+                       bytestring >= 0.9,
+                       containers >= 0.4,
+                       data-lens >= 2,
+                       data-lens-template >= 2,
+                       digestive-functors >= 0.2,
+                       digestive-functors-blaze >= 0.2.1,
+                       digestive-functors-snap >= 0.1.1,
+                       email-validate >= 0.2.6,
+                       HDBC >= 2.2,
+                       HDBC-sqlite3 >= 2.3,
+                       mtl >= 2.0,
+                       snap >= 0.6,
+                       snap-core >= 0.6,
+                       snap-server >= 0.6,
+                       snaplet-hdbc >= 0.6.3,
+                       text >= 0.11
+
+  if flag(development)
+    cpp-options: -DDEVELOPMENT
+    -- In development mode, speed is already going to suffer, so skip
+    -- the fancy optimization flags.  Additionally, disable all
+    -- warnings.  The hint library doesn't give an option to execute
+    -- compiled code when there were also warnings, so disabling
+    -- warnings allows quicker workflow.
+    ghc-options: -threaded -w
+  else
+    if impl(ghc >= 6.12.0)
+      ghc-options: -threaded -Wall -fwarn-tabs -funbox-strict-fields -O2
+                   -fno-warn-orphans -fno-warn-unused-do-bind
+    else
+      ghc-options: -threaded -Wall -fwarn-tabs -funbox-strict-fields -O2
+                   -fno-warn-orphans
+
