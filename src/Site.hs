@@ -296,17 +296,12 @@ listExperiencedProfilesHandler = do
   profiles <- experiencedProfiles
   blaze $ renderProfiles profiles
   
-newProfileHandler :: AppHandler ()
-newProfileHandler = do
-  res <- eitherSnapForm profileForm "profile-form-name"
-  case res of
-    Left form' -> do
-      blaze $ renderNewProfileForm form'
-
 addProfileHandler :: AppHandler ()
 addProfileHandler = do
   res <- eitherSnapForm profileForm "profile-form-name"
   case res of
+    Left form' -> do
+      blaze $ renderNewProfileForm form'
     Right prof -> do
       _ <- addProfile prof
       redirect "/"
@@ -326,8 +321,7 @@ trackme = makeSnaplet "trackme" "University relatet project" Nothing
   addRoutes  [  ("/", ifTop indexHandler)
              ,  ("/login", loginFormHandler)
              ,  ("/logout", logoutHandler)
-             ,  ("/profile/new", method GET $ newProfileHandler)
-             ,  ("/profile/new", method POST $ addProfileHandler)
+             ,  ("/profile/new", method $ newProfileHandler)
              ,  ("/profiles/", method GET $ listProfilesHandler)
              ,  ("/profiles/experienced/", method GET $ listExperiencedProfilesHandler)
              ,  ("/profiles/latest/", method GET $ listLatestProfilesHandler)
