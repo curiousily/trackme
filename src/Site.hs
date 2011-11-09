@@ -321,7 +321,7 @@ trackme = makeSnaplet "trackme" "University relatet project" Nothing
   addRoutes  [  ("/", ifTop indexHandler)
              ,  ("/login", loginFormHandler)
              ,  ("/logout", logoutHandler)
-             ,  ("/profile/new", method $ newProfileHandler)
+             ,  ("/profile/new", newProfileHandler)
              ,  ("/profiles/", method GET $ listProfilesHandler)
              ,  ("/profiles/experienced/", method GET $ listExperiencedProfilesHandler)
              ,  ("/profiles/latest/", method GET $ listLatestProfilesHandler)
