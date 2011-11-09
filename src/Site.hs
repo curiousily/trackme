@@ -296,8 +296,8 @@ listExperiencedProfilesHandler = do
   profiles <- experiencedProfiles
   blaze $ renderProfiles profiles
   
-addProfileHandler :: AppHandler ()
-addProfileHandler = do
+newProfileHandler :: AppHandler ()
+newProfileHandler = do
   res <- eitherSnapForm profileForm "profile-form-name"
   case res of
     Left form' -> do
